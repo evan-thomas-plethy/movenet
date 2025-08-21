@@ -7,6 +7,8 @@ from pycocotools.cocoeval import COCOeval
 import numpy as np
 import json
 import os
+import io
+import sys
 
 import torch.utils.data as data
 
@@ -151,4 +153,14 @@ class ACTIVE(data.Dataset):
         coco_eval = COCOeval(self.coco, coco_dets, "keypoints")
         coco_eval.evaluate()
         coco_eval.accumulate()
+        buffer = io.StringIO()
+        sys.stdout = buffer
         coco_eval.summarize()
+        sys.stdout = sys.__stdout__ 
+        summary_str = buffer.getvalue()
+
+        with open(os.path.join(save_dir, 'eval.txt'), 'w') as f:
+            f.write(summary_str)
+
+        with open(os.path.join(save_dir, 'eval.json'), 'w') as f:
+            json.dump(coco_eval.stats.tolist(), f, indent=2)

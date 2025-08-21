@@ -7,6 +7,9 @@ import numpy as np
 from progress.bar import Bar
 import time
 import torch
+import json
+import os
+from pathlib import Path
 
 from models.model import create_model, load_model
 from utils.image import get_affine_transform
@@ -105,7 +108,6 @@ class BaseDetector(object):
         scale_start_time = time.time()
 
         images, meta = self.pre_process(image, meta)
-
         images = images.to(self.opt.device)
         # torch.cuda.synchronize()
         pre_process_time = time.time()
@@ -122,6 +124,25 @@ class BaseDetector(object):
         post_process_time = time.time()
         post_time += post_process_time - decode_time
         results = dets
+
+        # ---------- SAVE TO JSON ----------
+        # Try to get a filename based on input image
+        filename = None
+        if isinstance(image_or_path_or_tensor, str):
+            filename = Path(image_or_path_or_tensor).stem
+        else:
+            # fallback: use a timestamp or unique ID if input was a tensor
+            filename = f"result_{int(time.time()*1000)}"
+
+        # Prepare output directory
+        save_dir = getattr(self.opt, 'save_dir', './outputs')
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+
+        # Save results to JSON
+        save_path = os.path.join(save_dir, f'{filename}.json')
+        with open(save_path, 'w') as f:
+            json.dump(results.tolist(), f, indent=2)
+        # ---------- DONE SAVING TO JSON ----------
 
         # results = self.merge_outputs(detections)
         # torch.cuda.synchronize()

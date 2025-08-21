@@ -82,7 +82,7 @@ class opts(object):
                                  help='input width. -1 for default from dataset.')
 
         # train
-        self.parser.add_argument('--lr', type=float, default=1.25e-4,
+        self.parser.add_argument('--lr', type=float, default=1e-4,
                                  help='learning rate for batch size 32.')
         self.parser.add_argument('--lr_step', type=str, default='90,120',
                                  help='drop learning rate by 10.')
@@ -99,6 +99,33 @@ class opts(object):
         self.parser.add_argument('--trainval', action='store_true',
                                  help='include validation in training and '
                                       'test on test set')
+        self.parser.add_argument('--backbone_lr', type=float, default=1e-5,
+                                help='learning rate for backbone after unfreezing')
+        self.parser.add_argument('--weight_decay', type=float, default=0.05,
+                                help='weight decay for optimizer')
+        self.parser.add_argument('--beta1', type=float, default=0.9,
+                                help='beta1 parameter for AdamW optimizer')
+        self.parser.add_argument('--beta2', type=float, default=0.999,
+                                help='beta2 parameter for AdamW optimizer')
+        self.parser.add_argument('--epsilon', type=float, default=1e-8,
+                                help='epsilon parameter for AdamW optimizer')
+        self.parser.add_argument('--warmup_fraction', type=float, default=0.1,
+                                help='fraction of total steps for learning rate warmup')
+        self.parser.add_argument('--unfreeze_epoch', type=int, default=10,
+                                help='epoch at which to unfreeze backbone')
+        self.parser.add_argument('--unfreeze_warmup_fraction', type=float, default=0.05,
+                                help='fraction of total steps for warmup after unfreezing backbone')
+        self.parser.add_argument('--start_unfreeze', type=int, default=14,
+                         help='index of first backbone block to unfreeze')
+        self.parser.add_argument('--end_unfreeze', type=int, default=17,
+                                help='index of last backbone block to unfreeze (inclusive)')
+        self.parser.add_argument('--unfreeze_fpn', type=bool, default=False,
+                                help='whether to unfreeze FPN')
+        self.parser.add_argument('--max_norm', type=float, default=5.0,
+                                help='gradient clipping max norm value')
+
+        self.parser.add_argument('--hyperparam_yaml', type=str, default=None,
+                                help='path to the hyperparameter YAML file')
 
         # test
         self.parser.add_argument('--flip_test', action='store_true',
@@ -127,6 +154,11 @@ class opts(object):
         self.parser.add_argument('--no_color_aug', action='store_true',
                                  help='not use the color augmenation '
                                       'from CornerNet')
+        self.parser.add_argument('--datasets', nargs='+', default=[],
+                                help='list of included datasets')
+        self.parser.add_argument('--mlflow_experiment', default="movenet-thunder-finetune",
+                                help='name of the MLflow experiment')
+
         # multi_pose
         self.parser.add_argument('--aug_rot', type=float, default=0,
                                  help='probability of applying '

@@ -1,0 +1,27 @@
+augmentations:
+ rotation:
+   degrees: [-15, 15]
+   probability: 0.3
+ scale:
+   ratio: [0.85, 1.15]
+   probability: 0.3
+ translation:
+   x_pct: [-0.15, 0.15]
+   y_pct: [-0.15, 0.15]
+   probability: 0.3
+ brightness:
+   delta: [-0.2, 0.2] 
+   probability: 0.4
+ contrast:
+   ratio: [0.85, 1.15]
+   probability: 0.4
+ gaussian_blur:
+   sigma: [0.0, 1.0]
+   probability: 0.15
+ crop:
+   keep_aspect_ratio: true
+   ratio: [0.8, 1.0]
+   probability: 0.3
+ occlusion:
+   area_pct: [0.05, 0.10]
+   probability: 0.1

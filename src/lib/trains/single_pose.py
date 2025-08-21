@@ -12,6 +12,7 @@ from utils.debugger import Debugger
 from utils.post_process import multi_pose_post_process
 from utils.oracle_utils import gen_oracle_map
 from .base_trainer import BaseTrainer
+from .validation_losses import SinglePoseValidationLoss
 
 
 class SinglePoseLoss(torch.nn.Module):
@@ -45,7 +46,7 @@ class SinglePoseLoss(torch.nn.Module):
                 output['hp_offset'], batch['hp_mask'],
                 batch['hp_ind'], batch['hp_offset']) / opt.num_stacks
             hm_hp_loss += self.crit_hm_hp(
-                output['hm_hp'], batch['hm_hp']) / opt.num_stacks
+                output['hm_hp'], batch['hm_hp']) / opt.num_stacks    
         loss = opt.hm_weight * hm_loss + \
             opt.hp_weight * hp_loss + \
             opt.hm_hp_weight * hm_hp_loss + opt.off_weight * hp_offset_loss
@@ -56,14 +57,20 @@ class SinglePoseLoss(torch.nn.Module):
 
 
 class SinglePoseTrainer(BaseTrainer):
-    def __init__(self, opt, model, optimizer=None):
+    def __init__(self, opt, model, optimizer=None, scheduler=None):
         super(SinglePoseTrainer, self).__init__(
-            opt, model, optimizer=optimizer)
+            opt, model, optimizer=optimizer, scheduler=scheduler)
 
     def _get_losses(self, opt):
         loss_states = ['loss', 'hm_loss', 'hp_loss', 'hm_hp_loss',
                        'hp_offset_loss']
         loss = SinglePoseLoss(opt)
+        return loss_states, loss
+
+    def _get_val_losses(self, opt):
+        loss_states = ['loss', 'hm_loss', 'hp_loss', 'hm_hp_loss',
+                       'hp_offset_loss', 'mAP']
+        loss = SinglePoseValidationLoss(opt)
         return loss_states, loss
 
     def debug(self, batch, output, iter_id):

@@ -10,23 +10,34 @@ from utils.utils import AverageMeter
 
 
 class ModelWithLoss(torch.nn.Module):
-  def __init__(self, model, loss):
+  def __init__(self, model, loss, val_loss=None):
     super(ModelWithLoss, self).__init__()
     self.model = model
     self.loss = loss
+    self.val_loss = val_loss
   
-  def forward(self, batch):
+  def forward(self, batch, phase='train'):
     outputs = self.model(batch['input'])
-    loss, loss_stats = self.loss(outputs, batch)
+    if phase == 'val' and self.val_loss is not None:
+      loss, loss_stats = self.val_loss(outputs, batch)
+    else:
+      loss, loss_stats = self.loss(outputs, batch)
     return outputs[-1], loss, loss_stats
 
 class BaseTrainer(object):
   def __init__(
-    self, opt, model, optimizer=None):
+    self, opt, model, optimizer=None, scheduler=None):
     self.opt = opt
     self.optimizer = optimizer
+    self.scheduler = scheduler
+    self.global_step = 0
     self.loss_stats, self.loss = self._get_losses(opt)
-    self.model_with_loss = ModelWithLoss(model, self.loss)
+    # self.val_loss_stats, self.val_loss = (None, None)
+    self.val_loss_stats, self.val_loss = self._get_val_losses(opt) if hasattr(self, '_get_val_losses') else (None, None)
+    self.model_with_loss = ModelWithLoss(model, self.loss, self.val_loss)
+    
+    if self.val_loss is not None and hasattr(self.val_loss, 'set_model'):
+      self.val_loss.set_model(model)
 
   def set_device(self, gpus, chunk_sizes, device):
     if len(gpus) > 1:
@@ -50,11 +61,17 @@ class BaseTrainer(object):
         model_with_loss = self.model_with_loss.module
       model_with_loss.eval()
       torch.cuda.empty_cache()
+      
+      # Reset validation metrics at the start of validation
+      if hasattr(model_with_loss, 'val_loss') and model_with_loss.val_loss is not None:
+        if hasattr(model_with_loss.val_loss, 'reset_metrics'):
+          model_with_loss.val_loss.reset_metrics()
 
     opt = self.opt
     results = {}
     data_time, batch_time = AverageMeter(), AverageMeter()
-    avg_loss_stats = {l: AverageMeter() for l in self.loss_stats}
+    current_loss_stats = self.val_loss_stats if phase == 'val' and self.val_loss_stats is not None else self.loss_stats
+    avg_loss_stats = {l: AverageMeter() for l in current_loss_stats}
     num_iters = len(data_loader) if opt.num_iters < 0 else opt.num_iters
     bar = Bar('{}/{}'.format(opt.task, opt.exp_id), max=num_iters)
     end = time.time()
@@ -66,12 +83,22 @@ class BaseTrainer(object):
       for k in batch:
         if k != 'meta':
           batch[k] = batch[k].to(device=opt.device, non_blocking=True)    
-      output, loss, loss_stats = model_with_loss(batch)
+      output, loss, loss_stats = model_with_loss(batch, phase)
       loss = loss.mean()
       if phase == 'train':
         self.optimizer.zero_grad()
         loss.backward()
+        actual_model = self.model_with_loss
+        if isinstance(actual_model, torch.nn.DataParallel):
+            actual_model = actual_model.module
+        torch.nn.utils.clip_grad_norm_(actual_model.parameters(), max_norm=self.opt.max_norm)
         self.optimizer.step()
+        self.scheduler.step()
+        self.global_step += 1
+
+        for i, group in enumerate(self.optimizer.param_groups):
+          print(f"Step {self.global_step} | Group {group.get('name','?')} LR: {group['lr']:.6f}")
+          
       batch_time.update(time.time() - end)
       end = time.time()
 
@@ -79,9 +106,10 @@ class BaseTrainer(object):
         epoch, iter_id, num_iters, phase=phase,
         total=bar.elapsed_td, eta=bar.eta_td)
       for l in avg_loss_stats:
-        avg_loss_stats[l].update(
-          loss_stats[l].mean().item(), batch['input'].size(0))
-        Bar.suffix = Bar.suffix + '|{} {:.4f} '.format(l, avg_loss_stats[l].avg)
+        if l in loss_stats:
+          avg_loss_stats[l].update(
+            loss_stats[l].mean().item(), batch['input'].size(0))
+          Bar.suffix = Bar.suffix + '|{} {:.4f} '.format(l, avg_loss_stats[l].avg)
       if not opt.hide_data_time:
         Bar.suffix = Bar.suffix + '|Data {dt.val:.3f}s({dt.avg:.3f}s) ' \
           '|Net {bt.avg:.3f}s'.format(dt=data_time, bt=batch_time)
@@ -99,6 +127,17 @@ class BaseTrainer(object):
       del output, loss, loss_stats
     
     bar.finish()
+    
+    # Compute final mAP at the end of validation
+    if phase == 'val' and hasattr(model_with_loss, 'val_loss') and model_with_loss.val_loss is not None:
+      if hasattr(model_with_loss.val_loss, 'compute_final_map'):
+        final_map = model_with_loss.val_loss.compute_final_map()
+        # Update the mAP in the results
+        if 'mAP' in avg_loss_stats:
+          # Replace the placeholder mAP with the final computed mAP
+          avg_loss_stats['mAP'].reset()
+          avg_loss_stats['mAP'].update(final_map, 1)  # Update with final mAP
+    
     ret = {k: v.avg for k, v in avg_loss_stats.items()}
     ret['time'] = bar.elapsed_td.total_seconds() / 60.
     return ret, results
@@ -112,6 +151,10 @@ class BaseTrainer(object):
   def _get_losses(self, opt):
     raise NotImplementedError
   
+  def _get_val_losses(self, opt):
+    """Override this method in subclasses to provide validation loss/metric functions"""
+    return None, None
+
   def val(self, epoch, data_loader):
     return self.run_epoch('val', epoch, data_loader)
 

@@ -1,0 +1,141 @@
+# hyperparam_sweep_partial_backbone.yaml
+sweep_runs:
+  # 1. Moderate unfreeze, unfreeze FPN
+  - name: run1_mid_unfreeze_with_fpn
+    head_lr: 1e-4
+    backbone_lr: 3e-6
+    unfreeze_epoch: 5
+    start_unfreeze: 5
+    end_unfreeze: 10
+    unfreeze_fpn: true
+    warmup_epochs: 1
+    unfreeze_warmup_epochs: 0.5
+    weight_decay: 0.05
+    batch_size: 32
+    num_epochs: 30
+
+  # 2. Early unfreeze, lower backbone LR, no FPN
+  - name: run2_early_unfreeze_low_backbone
+    head_lr: 1e-4
+    backbone_lr: 2e-6
+    unfreeze_epoch: 2
+    start_unfreeze: 0
+    end_unfreeze: 4
+    unfreeze_fpn: false
+    warmup_epochs: 1
+    unfreeze_warmup_epochs: 0.5
+    weight_decay: 0.05
+    batch_size: 32
+    num_epochs: 30
+
+  # 3. Later unfreeze, stronger weight decay, include FPN
+  - name: run3_late_unfreeze_with_fpn
+    head_lr: 1e-4
+    backbone_lr: 1e-6
+    unfreeze_epoch: 8
+    start_unfreeze: 10
+    end_unfreeze: 17
+    unfreeze_fpn: true
+    warmup_epochs: 1
+    unfreeze_warmup_epochs: 0.5
+    weight_decay: 0.05
+    batch_size: 32
+    num_epochs: 30
+
+  # 4. Mid-level unfreeze, include FPN
+  - name: run4_mid_unfreeze_with_fpn
+    head_lr: 1e-4
+    backbone_lr: 3e-6
+    unfreeze_epoch: 5
+    start_unfreeze: 3
+    end_unfreeze: 8
+    unfreeze_fpn: true
+    warmup_epochs: 1
+    unfreeze_warmup_epochs: 0.5
+    weight_decay: 0.05
+    batch_size: 32
+    num_epochs: 30
+
+  # 5. Quick partial unfreeze, no FPN
+  - name: run5_quick_unfreeze_partial_no_fpn
+    head_lr: 1e-4
+    backbone_lr: 3e-6
+    unfreeze_epoch: 3
+    start_unfreeze: 0
+    end_unfreeze: 7
+    unfreeze_fpn: false
+    warmup_epochs: 1
+    unfreeze_warmup_epochs: 0.5
+    weight_decay: 0.05
+    batch_size: 32
+    num_epochs: 30
+
+  # 6. Mid-late unfreeze, no FPN
+  - name: run6_mid_late_unfreeze
+    head_lr: 1e-4
+    backbone_lr: 2e-6
+    unfreeze_epoch: 6
+    start_unfreeze: 6
+    end_unfreeze: 13
+    unfreeze_fpn: false
+    warmup_epochs: 1
+    unfreeze_warmup_epochs: 0.5
+    weight_decay: 0.05
+    batch_size: 32
+    num_epochs: 30
+
+  # 7. Conservative, small unfreeze, include FPN
+  - name: run7_small_mid_unfreeze_with_fpn
+    head_lr: 1e-4
+    backbone_lr: 3e-6
+    unfreeze_epoch: 5
+    start_unfreeze: 7
+    end_unfreeze: 10
+    unfreeze_fpn: true
+    warmup_epochs: 1
+    unfreeze_warmup_epochs: 0.5
+    weight_decay: 0.05
+    batch_size: 32
+    num_epochs: 30
+
+  # 8. Mid + final layer unfreeze, include FPN
+  - name: run8_mid_plus_final_with_fpn
+    head_lr: 1e-4
+    backbone_lr: 2e-6
+    unfreeze_epoch: 6
+    start_unfreeze: 10
+    end_unfreeze: 18
+    unfreeze_fpn: true
+    warmup_epochs: 1
+    unfreeze_warmup_epochs: 0.5
+    weight_decay: 0.05
+    batch_size: 32
+    num_epochs: 30
+
+  # 9. Mid-late + final layer, include FPN
+  - name: run9_mid_late_plus_final_with_fpn
+    head_lr: 1e-4
+    backbone_lr: 2e-6
+    unfreeze_epoch: 5
+    start_unfreeze: 12
+    end_unfreeze: 18
+    unfreeze_fpn: true
+    warmup_epochs: 1
+    unfreeze_warmup_epochs: 0.5
+    weight_decay: 0.05
+    batch_size: 32
+    num_epochs: 30
+
+  # 10. Minimal final-layer unfreeze, very conservative
+  - name: run10_minimal_final_layer_with_fpn
+    head_lr: 1e-4
+    backbone_lr: 1e-6
+    unfreeze_epoch: 6
+    start_unfreeze: 17
+    end_unfreeze: 18
+    unfreeze_fpn: true
+    warmup_epochs: 0.5
+    unfreeze_warmup_epochs: 0.25
+    weight_decay: 0.05
+    batch_size: 32
+    num_epochs: 30

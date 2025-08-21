@@ -162,6 +162,9 @@ class Debugger(object):
         cv_keypoints = []
 
         keypoint_scores = kpt_with_conf[:, 2]
+
+        keypoint_scores = np.array([0.9 for i in range(17)])
+        
         keypoint_coords = kpt_with_conf[:, :2]
 
         new_keypoints = self.get_adjacent_keypoints(
