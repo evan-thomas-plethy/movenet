@@ -112,7 +112,25 @@ class BaseDetector(object):
         # torch.cuda.synchronize()
         pre_process_time = time.time()
         pre_time += pre_process_time - scale_start_time
-        output, dets, forward_time = self.process(images, return_time=True)
+
+        # if "ANKLE_DORSIFLEX_SITTING_3_frames0009" in image_or_path_or_tensor:
+        #     pred_dir = '/home/ubuntu/visionAI/movenet/images/val_pipeline_inputs'
+        #     os.makedirs(pred_dir, exist_ok=True)
+        #     pred_path = os.path.join(pred_dir, f'{image_or_path_or_tensor.split("/")[-1].split(".")[0]}.json')
+        #     with open(pred_path, 'w') as f:
+        #         json.dump(images.tolist(), f)
+        #     print(f"Saved input to {pred_path}")
+
+        output, dets, forward_time = self.process(images, return_time=True, image_path=image_or_path_or_tensor)
+
+        # if "ANKLE_DORSIFLEX_SITTING_3_frames0009" in image_or_path_or_tensor:
+        #     pred_dir = '/home/ubuntu/visionAI/movenet/images/val_pipeline_dets'
+        #     os.makedirs(pred_dir, exist_ok=True)
+        #     pred_path = os.path.join(pred_dir, f'{image_or_path_or_tensor.split("/")[-1].split(".")[0]}.json')
+        #     with open(pred_path, 'w') as f:
+        #         json.dump(dets.tolist(), f)
+        #     print(f"Saved dets to {pred_path}")
+
         # torch.cuda.synchronize()
         net_time += forward_time - pre_process_time
         decode_time = time.time()
@@ -120,6 +138,15 @@ class BaseDetector(object):
         if self.opt.debug >= 2:
             self.debug(debugger, images, dets, output)
         dets = self.post_process(dets, meta)
+
+        # if "ANKLE_DORSIFLEX_SITTING_3_frames0009" in image_or_path_or_tensor:
+        #     pred_dir = '/home/ubuntu/visionAI/movenet/images/val_pipeline_dets_post_process'
+        #     os.makedirs(pred_dir, exist_ok=True)
+        #     pred_path = os.path.join(pred_dir, f'{image_or_path_or_tensor.split("/")[-1].split(".")[0]}.json')
+        #     with open(pred_path, 'w') as f:
+        #         json.dump(dets.tolist(), f)
+        #     print(f"Saved dets to {pred_path}")
+
         # torch.cuda.synchronize()
         post_process_time = time.time()
         post_time += post_process_time - decode_time

@@ -228,3 +228,59 @@ def color_aug(data_rng, image, eig_val, eig_vec):
     for f in functions:
         f(data_rng, image, gs, gs_mean, 0.4)
     lighting_(data_rng, image, 0.1, eig_val, eig_vec)
+
+def square_padding_resize(img, target_size):
+    """
+    Resize image with square padding to preserve aspect ratio.
+    Matches the preprocessing approach used in base_detector.py
+    """
+    height, width = img.shape[0], img.shape[1]
+    
+    # Square padding
+    if height > width:
+        diff = height - width
+        img = cv2.copyMakeBorder(
+            img, 0, 0, int(diff//2), int(diff//2 + diff%2),
+            cv2.BORDER_CONSTANT, value=(0,0,0))
+    elif height < width:
+        diff = width - height
+        img = cv2.copyMakeBorder(
+            img, int(diff//2), int(diff//2+diff%2), 0, 0,
+            cv2.BORDER_CONSTANT, value=(0,0,0))
+    
+    # Resize to target size
+    resized = cv2.resize(img, target_size, interpolation=cv2.INTER_LINEAR)
+    return resized, (height, width)  # Return original dimensions for inverse transform
+
+
+def square_padding_transform_coords(coords, original_dims, target_size, padding_info=None):
+    """
+    Transform coordinates from original image space to padded+resized space.
+    Used for ground truth keypoints and bounding boxes.
+    """
+    orig_h, orig_w = original_dims
+    target_h, target_w = target_size
+    
+    # Calculate padding offsets
+    if orig_h > orig_w:
+        padding_left = (orig_h - orig_w) // 2
+        padding_top = 0
+        padded_size = orig_h
+    elif orig_w > orig_h:
+        padding_left = 0
+        padding_top = (orig_w - orig_h) // 2
+        padded_size = orig_w
+    else:
+        padding_left = 0
+        padding_top = 0
+        padded_size = orig_h
+    
+    # Scale factor from padded size to target size
+    scale_factor = max(target_h, target_w) / padded_size
+    
+    # Transform coordinates
+    transformed_coords = coords.copy()
+    transformed_coords[:, 0] = (coords[:, 0] + padding_left) * scale_factor
+    transformed_coords[:, 1] = (coords[:, 1] + padding_top) * scale_factor
+    
+    return transformed_coords

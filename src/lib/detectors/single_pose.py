@@ -7,6 +7,8 @@ import numpy as np
 from progress.bar import Bar
 import time
 import torch
+import os
+import json
 
 try:
     from external.nms import soft_nms_39
@@ -28,10 +30,26 @@ class SinglePoseDetector(BaseDetector):
         self.flip_idx = opt.flip_idx
         self.vis_thresh = opt.vis_thresh
 
-    def process(self, images, return_time=False):
+    def process(self, images, return_time=False, image_path=None):
         with torch.no_grad():
             # torch.cuda.synchronize()
             output = self.model(images)[0]
+
+            # if image_path is not None and "ANKLE_DORSIFLEX_SITTING_3_frames0009" in image_path:
+            #     pred_dir = '/home/ubuntu/visionAI/movenet/images/val_pipeline_outputs'
+            #     os.makedirs(pred_dir, exist_ok=True)
+            #     for key, value in output.items():
+            #         pred_path = os.path.join(
+            #             pred_dir, f'{image_path.split("/")[-1].split(".")[0]}_{key}.json'
+            #         )
+            #         with open(pred_path, 'w') as f:
+            #             # handle tensors/arrays cleanly
+            #             if hasattr(value, "tolist"):
+            #                 json.dump(value.tolist(), f)
+            #             else:
+            #                 json.dump(value, f)
+            #         print(f"Saved output for key '{key}' to {pred_path}")
+
             dets = self.model.decode(output)
             # torch.cuda.synchronize()
             forward_time = time.time()

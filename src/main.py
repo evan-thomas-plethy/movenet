@@ -197,6 +197,7 @@ def main(opt):
             if opt.val_intervals > 0 and epoch % opt.val_intervals == 0:
                 model_path = os.path.join(opt.save_dir, f'model_{mark}.pth')
                 save_model(model_path, epoch, model, optimizer)
+                mlflow.log_artifact(model_path)
                 with torch.no_grad():
                     log_dict_val, preds = trainer.val(epoch, val_loader)
                 for k, v in log_dict_val.items():

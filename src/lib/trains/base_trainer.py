@@ -7,7 +7,10 @@ import torch
 from progress.bar import Bar
 from models.data_parallel import DataParallel
 from utils.utils import AverageMeter
-
+import cv2
+import os
+import json
+import numpy as np
 
 class ModelWithLoss(torch.nn.Module):
   def __init__(self, model, loss, val_loss=None):
@@ -19,6 +22,30 @@ class ModelWithLoss(torch.nn.Module):
   def forward(self, batch, phase='train'):
     outputs = self.model(batch['input'])
     if phase == 'val' and self.val_loss is not None:
+    
+      # if int(batch['meta']['img_id']) == 27426:
+      #   pred_dir = '/home/ubuntu/visionAI/movenet/images/train_pipeline_inputs'
+      #   os.makedirs(pred_dir, exist_ok=True)
+      #   pred_path = os.path.join(pred_dir, f'{batch["meta"]["img_id"]}.json')
+      #   with open(pred_path, 'w') as f:
+      #       json.dump(batch['input'].tolist(), f)
+      #   print(f"Saved input to {pred_path}")
+
+      # if int(batch['meta']['img_id']) == 27426:
+      #   pred_dir = '/home/ubuntu/visionAI/movenet/images/train_pipeline_outputs'
+      #   os.makedirs(pred_dir, exist_ok=True)
+      #   for key, value in outputs[0].items():
+      #       pred_path = os.path.join(
+      #           pred_dir, f'{batch["meta"]["img_id"]}_{key}.json'
+      #       )
+      #       with open(pred_path, 'w') as f:
+      #           # handle tensors/arrays cleanly
+      #           if hasattr(value, "tolist"):
+      #               json.dump(value.tolist(), f)
+      #           else:
+      #               json.dump(value, f)
+      #       print(f"Saved output for key '{key}' to {pred_path}")
+
       loss, loss_stats = self.val_loss(outputs, batch)
     else:
       loss, loss_stats = self.loss(outputs, batch)
@@ -34,6 +61,7 @@ class BaseTrainer(object):
     self.loss_stats, self.loss = self._get_losses(opt)
     # self.val_loss_stats, self.val_loss = (None, None)
     self.val_loss_stats, self.val_loss = self._get_val_losses(opt) if hasattr(self, '_get_val_losses') else (None, None)
+    self.val_loss.set_model(model)
     self.model_with_loss = ModelWithLoss(model, self.loss, self.val_loss)
     
     if self.val_loss is not None and hasattr(self.val_loss, 'set_model'):
@@ -133,10 +161,16 @@ class BaseTrainer(object):
       if hasattr(model_with_loss.val_loss, 'compute_final_map'):
         final_map = model_with_loss.val_loss.compute_final_map()
         # Update the mAP in the results
-        if 'mAP' in avg_loss_stats:
+        if 'mAP0.50:0.95' in avg_loss_stats:
           # Replace the placeholder mAP with the final computed mAP
-          avg_loss_stats['mAP'].reset()
-          avg_loss_stats['mAP'].update(final_map, 1)  # Update with final mAP
+          avg_loss_stats['mAP0.50:0.95'].reset()
+          avg_loss_stats['mAP0.50:0.95'].update(final_map[0], 1)  # Update with final mAP
+          if 'AP0.50' in avg_loss_stats:
+            avg_loss_stats['AP0.50'].reset()
+            avg_loss_stats['AP0.50'].update(final_map[1], 1)
+          if 'AP0.75' in avg_loss_stats:
+            avg_loss_stats['AP0.75'].reset()
+            avg_loss_stats['AP0.75'].update(final_map[2], 1)
     
     ret = {k: v.avg for k, v in avg_loss_stats.items()}
     ret['time'] = bar.elapsed_td.total_seconds() / 60.

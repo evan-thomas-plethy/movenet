@@ -69,7 +69,7 @@ class SinglePoseTrainer(BaseTrainer):
 
     def _get_val_losses(self, opt):
         loss_states = ['loss', 'hm_loss', 'hp_loss', 'hm_hp_loss',
-                       'hp_offset_loss', 'mAP']
+                       'hp_offset_loss', 'mAP0.50:0.95', 'AP0.50', 'AP0.75']
         loss = SinglePoseValidationLoss(opt)
         return loss_states, loss
 
