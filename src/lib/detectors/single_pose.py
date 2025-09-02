@@ -18,6 +18,7 @@ except:
 from models.decode import single_pose_decode
 from models.utils import flip_tensor, flip_lr_off, flip_lr
 from utils.image import get_affine_transform
+from utils.image import transform_preds
 from utils.post_process import multi_pose_post_process, single_pose_post_process
 from utils.debugger import Debugger
 
@@ -35,7 +36,7 @@ class SinglePoseDetector(BaseDetector):
             # torch.cuda.synchronize()
             output = self.model(images)[0]
 
-            # if image_path is not None and "ANKLE_DORSIFLEX_SITTING_3_frames0009" in image_path:
+            # if image_path is not None and "ANKLE_DORSIFLEX_SITTING_3_frames0012" in image_path:
             #     pred_dir = '/home/ubuntu/visionAI/movenet/images/val_pipeline_outputs'
             #     os.makedirs(pred_dir, exist_ok=True)
             #     for key, value in output.items():
@@ -62,9 +63,19 @@ class SinglePoseDetector(BaseDetector):
     def post_process(self, dets, meta):
         dets = dets[0, 0, :, :]
         dets = dets.cpu().numpy()
-        dets = single_pose_post_process(
-            dets.copy(),
-            meta['in_height'], meta['in_width'])
+        dets[:, [0, 1]] = dets[:, [1, 0]]
+
+        if self.opt.preserve_aspect_ratio:
+            dets = single_pose_post_process(
+                dets.copy(),
+                meta['in_height'], meta['in_width'])
+        else:            
+            dets[:, :2] = dets[:, :2] * self.opt.output_res
+            dets = transform_preds(
+                dets.copy(),
+                meta['c'], meta['s'],
+                (self.opt.output_res, self.opt.output_res))
+                
         return dets
 
     def merge_outputs(self, detections):

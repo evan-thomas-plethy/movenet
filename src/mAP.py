@@ -21,7 +21,7 @@ from opts import opts
 from detectors.detector_factory import detector_factory
 
 # Global experiment ID - change this to match your experiment
-EXPERIMENT_ID = "heel-slides-partial-unfreeze-movenet-thunder-finetune"
+EXPERIMENT_ID = "robust-augs-heel-slides-movenet-thunder-finetune"
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -48,15 +48,19 @@ def evaluate_single_model(model_path, opt, coco_gt, temp_gt_path, run_id=None):
     
     # Run detection on all images
     all_detections = []
+    processed_images = 0
+    skipped_images = 0
     bar = Bar(f'Evaluating {Path(model_path).parent.name}', max=len(img_ids))
     
     for img_id in img_ids:
         try:
             # Get image info from COCO
             img_info = coco_gt.loadImgs(ids=[img_id])[0]
-            img_path = os.path.join(opt.mAP, 'val', img_info['file_name'])
+            # For general_val_1500, images are in the same directory as annotations.json
+            img_path = os.path.join(opt.mAP, img_info['file_name'])
             
             if not os.path.exists(img_path):
+                skipped_images += 1
                 bar.next()
                 continue
             
@@ -71,7 +75,7 @@ def evaluate_single_model(model_path, opt, coco_gt, temp_gt_path, run_id=None):
                 # Convert keypoints to COCO format
                 coco_keypoints = []
                 for j in range(17):
-                    y, x, conf = det[j]  # MoveNet returns (y, x, conf)
+                    x, y, conf = det[j]
                     # Convert confidence to visibility
                     if conf > 0.5:
                         visibility = 2  # visible
@@ -84,8 +88,8 @@ def evaluate_single_model(model_path, opt, coco_gt, temp_gt_path, run_id=None):
                 # Create bbox from keypoints
                 visible_kps = [kp for kp in det if kp[2] > 0.1]
                 if len(visible_kps) > 0:
-                    xs = [kp[1] for kp in visible_kps]  # x coordinates (index 1)
-                    ys = [kp[0] for kp in visible_kps]  # y coordinates (index 0)
+                    xs = [kp[0] for kp in visible_kps]
+                    ys = [kp[1] for kp in visible_kps]
                     x1, y1, x2, y2 = min(xs), min(ys), max(xs), max(ys)
                     bbox = [x1, y1, x2 - x1, y2 - y1]  # [x, y, width, height]
                 else:
@@ -103,6 +107,7 @@ def evaluate_single_model(model_path, opt, coco_gt, temp_gt_path, run_id=None):
                     "num_keypoints": 17
                 }
                 all_detections.append(detection)
+                processed_images += 1
             
             bar.next()
             
@@ -129,10 +134,16 @@ def evaluate_single_model(model_path, opt, coco_gt, temp_gt_path, run_id=None):
     coco_eval = COCOeval(coco_gt, coco_dt, iouType='keypoints')
     coco_eval.evaluate()
     coco_eval.accumulate()
+    
     coco_eval.summarize()
     
-    # Get keypoint mAP
-    keypoint_map = coco_eval.stats[0]  # AP at IoU=0.50:0.95
+    # Get keypoint mAP with proper error handling
+    if hasattr(coco_eval.stats, '__len__') and len(coco_eval.stats) > 0:
+        keypoint_map = coco_eval.stats[0]  # AP at IoU=0.50:0.95
+    else:
+        print("Warning: COCO evaluation stats is empty or invalid")
+        print("This usually indicates a mismatch between GT and DT annotations")
+        keypoint_map = 0.0
     
     # Clean up temporary prediction file
     if os.path.exists(temp_pred_file):
@@ -142,7 +153,7 @@ def evaluate_single_model(model_path, opt, coco_gt, temp_gt_path, run_id=None):
     if run_id is not None:
         try:
             with mlflow.start_run(run_id=run_id):
-                mlflow.log_metric("val/full_res_mAP_50_95", float(keypoint_map))
+                mlflow.log_metric("test/mAP0.50:0.95", float(keypoint_map))
                 print(f"✓ Logged mAP_50_95 = {keypoint_map:.4f} to MLflow run {run_id}")
         except Exception as e:
             print(f"Warning: Failed to log to MLflow: {e}")
@@ -196,7 +207,7 @@ def evaluate_all_models(opt):
         run_name_to_id[run_name] = run_id
     
     # Load existing COCO ground truth
-    gt_annotation_path = os.path.join(opt.mAP, 'annotations', 'active_val.json')
+    gt_annotation_path = os.path.join(opt.mAP, 'annotations.json')
     if not os.path.exists(gt_annotation_path):
         print(f"Error: Ground truth annotation file not found: {gt_annotation_path}")
         return
@@ -303,7 +314,7 @@ def evaluate_all_models(opt):
 if __name__ == '__main__':
     opt = opts().init()
     
-    opt.mAP = "../data/active"
+    opt.mAP = "../data/general_val_1500"
 
     print(f"Evaluating mAP for task: {opt.task}")
     print(f"Experiment ID: {EXPERIMENT_ID}")

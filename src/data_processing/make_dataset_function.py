@@ -14,10 +14,12 @@ def make_training_dataset(
     train_json_out,
     val_json_out,
     val_ratio=0.15,
-    general_val_dir=None,
+    general_val_dir="../data/general_val_500/",
+    use_general_val=False,
     use_existing_train_set=False,
     use_existing_val=False,
-    augmentations=None 
+    augmentations=None,
+    augmentations_yaml=None
 ):
     """
     Splits dataset by video before augmentation, then augments only the train set.
@@ -27,6 +29,10 @@ def make_training_dataset(
     - If `general_val_dir` is provided, adds its annotations and images to val set.
     """
     input_frames_dir = os.path.join(all_images_dir, "input_frames")
+
+    # Create output directories for JSON files
+    os.makedirs(os.path.dirname(train_json_out), exist_ok=True)
+    os.makedirs(os.path.dirname(val_json_out), exist_ok=True)
 
     # ----- Handle Validation -----
     val_frames = []
@@ -80,7 +86,7 @@ def make_training_dataset(
                 shutil.copy(src, dst)
 
         # Add general_val_dir content
-        if general_val_dir:
+        if use_general_val:
             print(f"➕ Adding general validation images and annotations from {general_val_dir}")
             general_ann_path = os.path.join(general_val_dir, "annotations.json")
             with open(general_ann_path, 'r') as f:
@@ -215,5 +221,5 @@ def make_training_dataset(
 
     print(f"✅ Split completed: {len(all_train_images)} train images, {len(val_frames)} val images")
 
-    if not use_existing_train_set:
-        run_all_augmentations()
+    if not use_existing_train_set and not augmentations:
+        run_all_augmentations(augmentations_yaml=f"data_processing/{augmentations_yaml}")

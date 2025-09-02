@@ -1,5 +1,6 @@
 *.jpg
 *.txt
+*.csv
 pre/*
 legacy/*
 src/_site/*

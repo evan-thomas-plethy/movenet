@@ -32,11 +32,13 @@ def main(opt):
         val_dir="../data/active/val/",
         train_json_out="../data/active/annotations/active_train.json",
         val_json_out="../data/active/annotations/active_val.json",
-        val_ratio=0.12,
+        val_ratio=0.15,
         general_val_dir="../data/general_val_500/",
-        use_existing_train_set=True,
+        use_general_val=False,
+        use_existing_train_set=False,
         use_existing_val=True,
-        augmentations=None
+        augmentations=None,
+        augmentations_yaml=opt.augmentations_yaml
     )
 
     torch.manual_seed(opt.seed)
@@ -61,10 +63,9 @@ def main(opt):
 
     optimizer = torch.optim.AdamW(
         [
-            {'params': head_params, 'lr': opt.lr, 'name': 'head'},
-            {'params': backbone_params, 'lr': opt.backbone_lr, 'name': 'backbone_partial'},
+            {'params': head_params, 'lr': opt.lr, 'weight_decay': opt.head_weight_decay, 'name': 'head'},
+            {'params': backbone_params, 'lr': opt.backbone_lr, 'weight_decay': opt.backbone_weight_decay, 'name': 'backbone_partial'},
         ],
-        weight_decay=opt.weight_decay,
         betas=(opt.beta1, opt.beta2),
         eps=opt.epsilon
     )
@@ -136,7 +137,7 @@ def main(opt):
     # MLflow setup
     mlflow.set_tracking_uri("http://35.165.139.156:5000")
     mlflow.set_experiment(opt.mlflow_experiment)
-    with mlflow.start_run(run_name=f"{opt.exp_id}"):
+    with mlflow.start_run(run_name=f"{opt.run_id}"):
         mlflow.log_params({
             "architecture": "MoveNet Thunder",
             "batch_size": opt.batch_size,
@@ -146,7 +147,8 @@ def main(opt):
             "learning_rate": opt.lr,
             "backbone_lr": opt.backbone_lr,
             "lr_schedule": "cosine_decay",
-            "weight_decay": opt.weight_decay,
+            "head_weight_decay": opt.head_weight_decay,
+            "backbone_weight_decay": opt.backbone_weight_decay,
             "beta1": opt.beta1,
             "beta2": opt.beta2,
             "epsilon": opt.epsilon,
@@ -159,6 +161,7 @@ def main(opt):
             "gradient_clip_max_norm": opt.max_norm,
             "save_metric": opt.metric,
             "val_intervals": opt.val_intervals,
+            "preserve_aspect_ratio": opt.preserve_aspect_ratio,
         })
         mlflow.set_tag("datasets", " + ".join(opt.datasets))
 
@@ -166,6 +169,7 @@ def main(opt):
         patience = 10 / opt.val_intervals
         counter = 0
         best = 0 # Make this 1e10 when using loss
+        last = 0
 
         for epoch in range(start_epoch + 1, opt.num_epochs + 1):
             # Partial unfreeze at unfreeze_epoch
@@ -209,10 +213,16 @@ def main(opt):
                     print(f"Best {opt.metric} at epoch {epoch}: {best}")
                     best_model_path = os.path.join(opt.save_dir, 'model_best.pth')
                     save_model(best_model_path, epoch, model)
+                    counter = 0  # Reset counter when we get a new best
                 else:
+                    # if log_dict_val[opt.metric] < last:  # Only increment counter if metric decreased
+                    #     counter += 1
+                    # else:
+                    #     counter = 0  # Reset counter if metric didn't decrease
                     counter += 1
+                # last = log_dict_val[opt.metric]  # Update last for next epoch
                 if counter >= patience:
-                    print(f"Early stopping at epoch {epoch}, no improvement for {patience} epochs.")
+                    print(f"Early stopping at epoch {epoch}, metric continuously decreased for {patience} epochs.")
                     break
             else:
                 model_path = os.path.join(opt.save_dir, 'model_last.pth')
@@ -227,27 +237,29 @@ def main(opt):
         mlflow.pytorch.log_model(model, "final_model")
         mlflow.log_artifact("../data/active/annotations/active_train.json", artifact_path="annotations")
         mlflow.log_artifact("../data/active/annotations/active_val.json", artifact_path="annotations")
-        mlflow.log_artifact("data_processing/augmentations.yaml", artifact_path="annotations")
+        mlflow.log_artifact(f"data_processing/{opt.augmentations_yaml}", artifact_path="annotations")
 
     logger.close()
 
 
 if __name__ == '__main__':
     opt = opts().parse()
-    with open(opt.hyperparam_yaml) as f:
-        sweep_config = yaml.safe_load(f)["sweep_runs"]
-    for run_cfg in sweep_config:
-        opt.exp_id = f"HEEL_SLIDES_{run_cfg['name']}"
-        opt.lr = float(run_cfg["head_lr"])
-        opt.backbone_lr = float(run_cfg["backbone_lr"])
-        opt.unfreeze_epoch = int(run_cfg["unfreeze_epoch"])
-        opt.warmup_epochs = float(run_cfg["warmup_epochs"])
-        opt.unfreeze_warmup_epochs = float(run_cfg["unfreeze_warmup_epochs"])
-        opt.weight_decay = float(run_cfg["weight_decay"])
-        opt.batch_size = int(run_cfg["batch_size"])
-        opt.num_epochs = int(run_cfg["num_epochs"])
-        opt.start_unfreeze = int(run_cfg["start_unfreeze"])
-        opt.end_unfreeze = int(run_cfg["end_unfreeze"])
-        opt.unfreeze_fpn = bool(run_cfg["unfreeze_fpn"])
+    if opt.hyperparam_yaml:
+        with open(opt.hyperparam_yaml) as f:
+            sweep_config = yaml.safe_load(f)["sweep_runs"]
+        for run_cfg in sweep_config:
+            opt.run_id = f"HEEL_SLIDES_{run_cfg['name']}"
+            opt.lr = float(run_cfg["head_lr"])
+            opt.backbone_lr = float(run_cfg["backbone_lr"])
+            opt.unfreeze_epoch = int(run_cfg["unfreeze_epoch"])
+            opt.warmup_epochs = float(run_cfg["warmup_epochs"])
+            opt.unfreeze_warmup_epochs = float(run_cfg["unfreeze_warmup_epochs"])
+            opt.head_weight_decay = float(run_cfg["head_weight_decay"])
+            opt.backbone_weight_decay = float(run_cfg["backbone_weight_decay"])
+            opt.batch_size = int(run_cfg["batch_size"])
+            opt.num_epochs = int(run_cfg["num_epochs"])
+            opt.start_unfreeze = int(run_cfg["start_unfreeze"])
+            opt.end_unfreeze = int(run_cfg["end_unfreeze"])
+            opt.unfreeze_fpn = bool(run_cfg["unfreeze_fpn"])
 
-        main(opt)
+    main(opt)

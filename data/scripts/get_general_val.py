@@ -4,29 +4,11 @@ import shutil
 import random
 
 # === Parameters ===
-SOURCE_IMAGES_DIR = "general-val/val"
-SOURCE_ANNOTATION_FILE = "general-val/annotations/annotations.json"
+SOURCE_IMAGES_DIR = "../general-val/val"
+SOURCE_ANNOTATION_FILE = "../general-val/annotations/annotations.json"
 
 # === Roboflow → COCO keypoint index mapping ===
-roboflow_to_coco_index = [
-    0,  # nose
-    1,  # left_eye
-    2,  # right_eye
-    3,  # left_ear
-    4,  # right_ear
-    5,  # left_shoulder
-    6,  # right_shoulder
-    7,  # left_elbow
-    8,  # right_elbow
-    9,  # left_wrist
-    10, # right_wrist
-    11, # left_hip
-    12, # right_hip
-    13, # left_knee
-    14, # right_knee
-    15, # left_ankle
-    16, # right_ankle
-]
+indices_map = [0, 14, 15, 17, 16, 2, 5, 3, 6, 4, 7, 8, 11, 9, 12, 10, 13]
 
 def reorder_keypoints(annotation):
     """Reorder keypoints from Roboflow order to COCO order."""
@@ -38,13 +20,15 @@ def reorder_keypoints(annotation):
         print(f"⚠️ Skipping annotation {annotation['id']} — invalid keypoints length.")
         return annotation
 
-    num_points = len(kpts) // 3
-    grouped = [kpts[i*3:(i+1)*3] for i in range(num_points)]
-    reordered = [grouped[i] for i in roboflow_to_coco_index if i < len(grouped)]
-    annotation["keypoints"] = [v for pt in reordered for v in pt]
+    # kpts is a flat list [x1, y1, v1, x2, y2, v2, ...]
+    coco_kpts = []
+    for i in indices_map:
+        coco_kpts.extend(kpts[i*3:(i+1)*3])
+    annotation["keypoints"] = coco_kpts
+
     annotation["num_keypoints"] = sum(
         1 for i in range(0, len(annotation["keypoints"]), 3)
-        if annotation["keypoints"][i+2] > 0
+        if annotation["keypoints"][i+2] > 0.1
     )
     return annotation
 
@@ -63,6 +47,27 @@ def sample_val_subset(num_samples):
     all_images = coco.get("images", [])
     all_annotations = coco.get("annotations", [])
     categories = coco.get("categories", [])
+    categories = [cat for cat in categories if cat["id"] == 1]
+    categories[0]["keypoints"] = [
+        "nose",
+        "left-eye",
+        "right-eye", 
+        "left-ear",
+        "right-ear",
+        "left-shoulder",
+        "right-shoulder",
+        "left-elbow",
+        "right-elbow", 
+        "left-wrist",
+        "right-wrist",
+        "left-hip",
+        "right-hip",
+        "left-knee",
+        "right-knee",
+        "left-ankle",
+        "right-ankle"
+    ]
+    categories[0]["skeleton"] = []
 
     if num_samples > len(all_images):
         raise ValueError(f"Requested {num_samples} samples, but only {len(all_images)} available.")
@@ -108,7 +113,7 @@ if __name__ == "__main__":
     parser.add_argument("num_samples", type=int, help="Number of images to sample")
 
     args = parser.parse_args()
-    DEST_DIR = f"general_val_{args.num_samples}"
+    DEST_DIR = f"../general_val_{args.num_samples}"
     DEST_IMAGE_DIR = DEST_DIR
     DEST_JSON_PATH = os.path.join(DEST_DIR, "annotations.json")
     sample_val_subset(args.num_samples)

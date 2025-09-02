@@ -1,14 +1,15 @@
 Train:
-python main.py single_pose --dataset active --arch movenet --gpus 0 --input_res 256 --num_workers 4 --load_model ../models/movenet_thunder.pth --datasets 1.0 2.0 3.0 general_val --metric mAP0.50:0.95 --val_intervals 1 --mlflow_experiment heel-slides-partial-unfreeze-movenet-thunder-finetune --hyperparam_yaml hyperparam_sweep_partial_backbone.yaml
+python main.py single_pose --dataset active --arch movenet --gpus 0 --input_res 256 --num_workers 4 --load_model ../models/movenet_thunder.pth --datasets 1.0 2.0 3.0 --metric mAP0.50:0.95 --val_intervals 1 --mlflow_experiment robust-augs-heel-slides-movenet-thunder-finetune --run_id robust_augs_exp_1 --augmentations_yaml augmentations.yaml --batch_size 32 --num_epochs 50 --lr 1e-4 --head_weight_decay 0.05
+python main.py single_pose --dataset active --arch movenet --gpus 0 --input_res 256 --num_workers 4 --load_model ../models/movenet_thunder.pth --datasets 1.0 2.0 3.0 --metric mAP0.50:0.95 --val_intervals 1 --mlflow_experiment robust-augs-heel-slides-movenet-thunder-finetune --run_id robust_augs_exp_2 --augmentations_yaml pair_augmentations.yaml --batch_size 32 --num_epochs 50 --lr 1e-4 --head_weight_decay 0.05
 
 Vis: 
 THESE are saved to exp/cache/debug/  
 ALT MODELS: ../models/movenet_thunder.pth
             ../exp/single_pose/HEEL_SLIDES_run0_head_only_control/model_best.pth
-python demo.py single_pose --dataset active --arch movenet --demo ../data/active/val --load_model ../exp/single_pose/heel-slides-partial-unfreeze-movenet-thunder-finetune/HEEL_SLIDES_run1_mid_unfreeze_with_fpn/model_3.pth --K 1 --gpus -1 --debug 4
+python demo_smartcropping.py single_pose --dataset active --arch movenet --demo ../data/test/val --load_model ../exp/single_pose/heel-slides-movenet-thunder-finetune/convergence_test_1/model_best.pth --K 1 --gpus -1 --debug 4
 
 Test:
 python test.py single_pose --exp_id test_swag --dataset active --arch movenet --input_res 256 --load_model ../exp/single_pose/dataset12x100_lr1e-4_lrStep10,25_hmW1oW1hpW2hmHpW0.5/model_best.pth
 
 Accuracy:
-python mAP_debug.py single_pose --dataset active --arch movenet --input_res 25 --K 1 --gpus -1 --debug 4
+python mAP.py single_pose --dataset active --arch movenet --input_res 256 --K 1 --gpus -1 --debug 4

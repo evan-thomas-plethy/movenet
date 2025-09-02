@@ -1,7 +1,7 @@
 import json
 import os
 
-val_json_path = "../data/active/annotations/active_val.json"
+val_json_path = "../merged_dataset/person_keypoints.json"
 
 # Load COCO-style JSON
 with open(val_json_path, 'r') as f:

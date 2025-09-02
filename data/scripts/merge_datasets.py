@@ -7,13 +7,13 @@ from tqdm import tqdm
 
 # List of dataset directories to merge
 DATASET_DIRS = [
-    "dataset_1.0",
-    "dataset_2.0",
-    "dataset_3.0",
+    "../dataset_1.0",
+    "../dataset_2.0",
+    "../dataset_3.0",
     # "general_val_500",
 ]
 
-MERGED_DIR = "merged_dataset"
+MERGED_DIR = "../merged_dataset"
 INPUT_FRAMES_DIR = os.path.join(MERGED_DIR, "input_frames")
 
 # Remove merged directory if it exists

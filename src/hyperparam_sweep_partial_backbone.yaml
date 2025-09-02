@@ -1,5 +1,19 @@
 # hyperparam_sweep_partial_backbone.yaml
 sweep_runs:
+  # 0. Control
+  - name: run0_control_head_only_no_fpn
+    head_lr: 1e-4
+    backbone_lr: 3e-6
+    unfreeze_epoch: 0
+    start_unfreeze: 0
+    end_unfreeze: 0
+    unfreeze_fpn: false
+    warmup_epochs: 1
+    unfreeze_warmup_epochs: 0.5
+    weight_decay: 0.05
+    batch_size: 32
+    num_epochs: 30
+
   # 1. Moderate unfreeze, unfreeze FPN
   - name: run1_mid_unfreeze_with_fpn
     head_lr: 1e-4

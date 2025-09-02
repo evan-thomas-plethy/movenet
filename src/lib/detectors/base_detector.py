@@ -12,7 +12,8 @@ import os
 from pathlib import Path
 
 from models.model import create_model, load_model
-from utils.image import get_affine_transform
+from utils.image import square_padding_resize
+from utils.image import get_affine_transform, affine_transform
 from utils.debugger import Debugger
 
 
@@ -41,38 +42,37 @@ class BaseDetector(object):
     def pre_process(self, image, meta=None):
         height, width = image.shape[0:2]
 
-        # padding all images to be square.
-        if height > width:
-            diff = height - width
-            image = cv2.copyMakeBorder(
-                image, 0, 0, int(diff//2), int(diff//2 + diff%2),
-                cv2.BORDER_CONSTANT, value=(0,0,0))
-        elif height < width:
-            diff = width - height
-            image = cv2.copyMakeBorder(
-                image, int(diff//2), int(diff//2+diff%2), 0, 0,
-                cv2.BORDER_CONSTANT, value=(0,0,0))
+        new_height = 256
+        new_width = 256
+        target_size = (new_width, new_height)
 
-        new_height = 256#192
-        new_width = 256#192
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32)
 
-        inp_height = new_height
-        inp_width = new_width
-        c = np.array([new_width // 2, new_height // 2], dtype=np.float32)
-        s = np.array([inp_width, inp_height], dtype=np.float32)
+        if self.opt.preserve_aspect_ratio:
+            inp_image, original_dims = square_padding_resize(image, target_size)
+            c = np.array([new_width // 2, new_height // 2], dtype=np.float32)
+            s = np.array([new_width, new_height], dtype=np.float32)
+        else:
+            c = np.array([width / 2., height / 2.], dtype=np.float32)
+            s = max(height, width) * 1.0
+            rot = 0
+            trans_input = get_affine_transform(
+                c, s, rot, [new_width, new_height])
+            inp_image = cv2.warpAffine(image, trans_input,
+                                      (new_width, new_height),
+                                      flags=cv2.INTER_LINEAR)
 
-        inp_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-        inp_image = cv2.cvtColor(inp_image, cv2.COLOR_BGR2RGB).astype(np.float32)
-        inp_image = ((inp_image / 127.5 - self.mean) /
-                     self.std).astype(np.float32)
-        images = inp_image.transpose(2, 0, 1).reshape(
-            1, 3, inp_height, inp_width)
+        inp_image = (inp_image.astype(np.float32) / 127.5)
+        inp_image = (inp_image - self.mean) / self.std
+        inp_image = inp_image.transpose(2, 0, 1)
+        
+        images = inp_image.reshape(1, 3, new_height, new_width)
         images = torch.from_numpy(images)
         meta = {'c': c, 's': s,
                 'in_height': height,
                 'in_width': width,
-                'out_height': inp_height // self.opt.down_ratio,
-                'out_width': inp_width // self.opt.down_ratio}
+                'out_height': new_height // self.opt.down_ratio,
+                'out_width': new_width // self.opt.down_ratio}
         return images, meta
 
     def process(self, images, return_time=False):
@@ -113,7 +113,7 @@ class BaseDetector(object):
         pre_process_time = time.time()
         pre_time += pre_process_time - scale_start_time
 
-        # if "ANKLE_DORSIFLEX_SITTING_3_frames0009" in image_or_path_or_tensor:
+        # if "ANKLE_DORSIFLEX_SITTING_3_frames0012" in image_or_path_or_tensor:
         #     pred_dir = '/home/ubuntu/visionAI/movenet/images/val_pipeline_inputs'
         #     os.makedirs(pred_dir, exist_ok=True)
         #     pred_path = os.path.join(pred_dir, f'{image_or_path_or_tensor.split("/")[-1].split(".")[0]}.json')
@@ -123,13 +123,13 @@ class BaseDetector(object):
 
         output, dets, forward_time = self.process(images, return_time=True, image_path=image_or_path_or_tensor)
 
-        # if "ANKLE_DORSIFLEX_SITTING_3_frames0009" in image_or_path_or_tensor:
-        #     pred_dir = '/home/ubuntu/visionAI/movenet/images/val_pipeline_dets'
-        #     os.makedirs(pred_dir, exist_ok=True)
-        #     pred_path = os.path.join(pred_dir, f'{image_or_path_or_tensor.split("/")[-1].split(".")[0]}.json')
-        #     with open(pred_path, 'w') as f:
-        #         json.dump(dets.tolist(), f)
-        #     print(f"Saved dets to {pred_path}")
+        if "ANKLE_DORSIFLEX_SITTING_3_frames0002" in image_or_path_or_tensor:
+            pred_dir = '/home/ubuntu/visionAI/movenet/images/val_pipeline_dets'
+            os.makedirs(pred_dir, exist_ok=True)
+            pred_path = os.path.join(pred_dir, f'{image_or_path_or_tensor.split("/")[-1].split(".")[0]}.json')
+            with open(pred_path, 'w') as f:
+                json.dump(dets.tolist(), f)
+            print(f"Saved dets to {pred_path}")
 
         # torch.cuda.synchronize()
         net_time += forward_time - pre_process_time
@@ -139,13 +139,13 @@ class BaseDetector(object):
             self.debug(debugger, images, dets, output)
         dets = self.post_process(dets, meta)
 
-        # if "ANKLE_DORSIFLEX_SITTING_3_frames0009" in image_or_path_or_tensor:
-        #     pred_dir = '/home/ubuntu/visionAI/movenet/images/val_pipeline_dets_post_process'
-        #     os.makedirs(pred_dir, exist_ok=True)
-        #     pred_path = os.path.join(pred_dir, f'{image_or_path_or_tensor.split("/")[-1].split(".")[0]}.json')
-        #     with open(pred_path, 'w') as f:
-        #         json.dump(dets.tolist(), f)
-        #     print(f"Saved dets to {pred_path}")
+        if "ANKLE_DORSIFLEX_SITTING_3_frames0002" in image_or_path_or_tensor:
+            pred_dir = '/home/ubuntu/visionAI/movenet/images/val_pipeline_dets_post_process'
+            os.makedirs(pred_dir, exist_ok=True)
+            pred_path = os.path.join(pred_dir, f'{image_or_path_or_tensor.split("/")[-1].split(".")[0]}.json')
+            with open(pred_path, 'w') as f:
+                json.dump(dets.tolist(), f)
+            print(f"Saved dets to {pred_path}")
 
         # torch.cuda.synchronize()
         post_process_time = time.time()
@@ -178,7 +178,9 @@ class BaseDetector(object):
         tot_time += end_time - start_time
 
         if self.opt.debug >= 1:
-            self.show_results(debugger, image, results, prefix=self.global_num)
+            results_copy = results.copy()
+            results_copy[:, [0, 1]] = results_copy[:, [1, 0]]
+            self.show_results(debugger, image, results_copy, prefix=self.global_num)
             self.global_num += 1
 
         return {'results': results, 'tot': tot_time, 'load': load_time,

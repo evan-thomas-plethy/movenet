@@ -51,22 +51,33 @@ class SinglePoseDataset(data.Dataset):
         
         flipped = False
         if self.split == 'train':
-            # Apply flip augmentation if needed
             if np.random.random() < self.opt.flip:
                 flipped = True
                 img = img[:, ::-1, :]
-                width = img.shape[1]  # Update width after flip
+                width = img.shape[1]
 
-        # Apply square padding and resize (matching inference pipeline)
-        inp, original_dims = square_padding_resize(img, (self.opt.input_res, self.opt.input_res))
+        output_res = self.opt.output_res
+        num_joints = self.num_joints
+
+        if self.opt.preserve_aspect_ratio:
+            inp, original_dims = square_padding_resize(img, (self.opt.input_res, self.opt.input_res))
+        else:
+            c = np.array([img.shape[1] / 2., img.shape[0] / 2.], dtype=np.float32)
+            s = max(img.shape[0], img.shape[1]) * 1.0
+            rot = 0
+            trans_input = get_affine_transform(
+                c, s, rot, [self.opt.input_res, self.opt.input_res])
+            inp = cv2.warpAffine(img, trans_input,
+                                (self.opt.input_res, self.opt.input_res),
+                                flags=cv2.INTER_LINEAR)
+            trans_output_rot = get_affine_transform(
+                c, s, rot, [output_res, output_res])
+            trans_output = get_affine_transform(c, s, 0, [output_res, output_res])
         
         # Normalize image
         inp = (inp.astype(np.float32) / 127.5)
         inp = (inp - self.mean) / self.std
         inp = inp.transpose(2, 0, 1)
-
-        output_res = self.opt.output_res
-        num_joints = self.num_joints
 
         hm = np.zeros((self.num_classes, output_res,
                       output_res), dtype=np.float32)
@@ -89,19 +100,21 @@ class SinglePoseDataset(data.Dataset):
             bbox = self._coco_box_to_bbox(ann['bbox'])
             cls_id = int(ann['category_id']) - 1
             pts = np.array(ann['keypoints'], np.float32).reshape(num_joints, 3)
-            
             if flipped:
                 bbox[[0, 2]] = width - bbox[[2, 0]] - 1
                 pts[:, 0] = width - pts[:, 0] - 1
                 for e in self.flip_idx:
                     pts[e[0]], pts[e[1]] = pts[e[1]].copy(), pts[e[0]].copy()
             
-            # Transform bounding box coordinates using square padding approach
-            bbox_coords = np.array([[bbox[0], bbox[1]], [bbox[2], bbox[3]]])
-            bbox_coords = square_padding_transform_coords(
-                bbox_coords, original_dims, (output_res, output_res))
-            bbox = np.array([bbox_coords[0, 0], bbox_coords[0, 1], 
-                           bbox_coords[1, 0], bbox_coords[1, 1]])
+            if self.opt.preserve_aspect_ratio:
+                bbox_coords = np.array([[bbox[0], bbox[1]], [bbox[2], bbox[3]]])
+                bbox_coords = square_padding_transform_coords(
+                    bbox_coords, original_dims, (output_res, output_res))
+                bbox = np.array([bbox_coords[0, 0], bbox_coords[0, 1], 
+                            bbox_coords[1, 0], bbox_coords[1, 1]])
+            else:
+                bbox[:2] = affine_transform(bbox[:2], trans_output)
+                bbox[2:] = affine_transform(bbox[2:], trans_output)
             
             bbox = np.clip(bbox, 0, output_res - 1)
             h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]
@@ -123,11 +136,14 @@ class SinglePoseDataset(data.Dataset):
                     if self.opt.mse_loss else max(0, int(hp_radius))
                 for j in range(num_joints):
                     if pts[j, 2] > 0:
-                        # Transform keypoint coordinates using square padding approach
-                        kp_coords = np.array([pts[j, :2]])
-                        kp_coords = square_padding_transform_coords(
-                            kp_coords, original_dims, (output_res, output_res))
-                        pts[j, :2] = kp_coords[0]
+                        if self.opt.preserve_aspect_ratio:
+                            kp_coords = np.array([pts[j, :2]])
+                            kp_coords = square_padding_transform_coords(
+                                kp_coords, original_dims, (output_res, output_res))
+                            pts[j, :2] = kp_coords[0]
+                        else:
+                            pts[j, :2] = affine_transform(
+                                pts[j, :2], trans_output_rot)
                         
                         if pts[j, 0] >= 0 and pts[j, 0] < output_res and \
                            pts[j, 1] >= 0 and pts[j, 1] < output_res:
@@ -149,8 +165,8 @@ class SinglePoseDataset(data.Dataset):
                 draw_gaussian(hm[cls_id], ct_int, radius)
                 gt_det.append([ct[0] - w / 2, ct[1] - h / 2,
                                ct[0] + w / 2, ct[1] + h / 2, 1] +
-                              pts[:, :2].reshape(num_joints * 2).tolist() + [cls_id])
-        
+                              pts[:, :2].reshape(num_joints * 2).tolist() + [cls_id])  
+
         ret = {'input': inp, 'hm': hm, 'ind': ind,
                'hps': kps, 'hps_mask': kps_mask,
                'hm_hp': hm_hp, 'hp_offset': hp_offset,

@@ -6,6 +6,7 @@ import torch
 import numpy as np
 from models.losses import FocalLoss, RegL1Loss, RegLoss, RegWeightedL1Loss
 from models.decode import single_pose_decode
+from utils.image import transform_preds, inverse_square_padding_transform_coords
 from models.utils import _sigmoid
 from utils.post_process import single_pose_post_process
 from pycocotools.coco import COCO
@@ -89,35 +90,48 @@ class SinglePoseValidationLoss(torch.nn.Module):
             output = outputs[0]
             dets = self.model.decode(output)
 
-            # if int(batch['meta']['img_id']) == 27426:
-            #     pred_dir = '/home/ubuntu/visionAI/movenet/images/train_pipeline_dets'
-            #     os.makedirs(pred_dir, exist_ok=True)
-            #     pred_path = os.path.join(pred_dir, f'{batch["meta"]["img_id"]}.json')
-            #     with open(pred_path, 'w') as f:
-            #         json.dump(dets.tolist(), f)
-            #     print(f"Saved dets to {pred_path}")
+            if int(batch['meta']['img_id']) == 3364:
+                pred_dir = '/home/ubuntu/visionAI/movenet/images/train_pipeline_dets'
+                os.makedirs(pred_dir, exist_ok=True)
+                pred_path = os.path.join(pred_dir, f'{batch["meta"]["img_id"]}.json')
+                with open(pred_path, 'w') as f:
+                    json.dump(dets.tolist(), f)
+                print(f"Saved dets to {pred_path}")
 
             dets = dets[0, 0, :, :]
             dets = dets.cpu().numpy()
-            dets = single_pose_post_process(
-                dets.copy(),
-                batch['meta']['in_height'].cpu().numpy(), 
-                batch['meta']['in_width'].cpu().numpy())
+            dets[:, [0, 1]] = dets[:, [1, 0]] 
+            dets[:, :2] = dets[:, :2] * self.opt.output_res
 
-            # if int(batch['meta']['img_id']) == 27426:
-            #     pred_dir = '/home/ubuntu/visionAI/movenet/images/train_pipeline_dets_post_process'
-            #     os.makedirs(pred_dir, exist_ok=True)
-            #     pred_path = os.path.join(pred_dir, f'{batch["meta"]["img_id"]}.json')
-            #     with open(pred_path, 'w') as f:
-            #         json.dump(dets.tolist(), f)
-            #     print(f"Saved dets to {pred_path}")
-
-            swapped_dets = dets.copy()
-            swapped_dets[:, [0, 1]] = dets[:, [1, 0]]
+            if self.opt.preserve_aspect_ratio:  
+                dets = inverse_square_padding_transform_coords(
+                    dets.copy(),
+                    (batch['meta']['in_height'].cpu().numpy(), batch['meta']['in_width'].cpu().numpy()),
+                    (self.opt.output_res, self.opt.output_res)
+                )
+            else:                
+                in_height = float(batch['meta']['in_height'].cpu().numpy())
+                in_width = float(batch['meta']['in_width'].cpu().numpy())
+                c = np.array([in_width / 2., in_height / 2.], dtype=np.float32)
+                s = max(in_height, in_width) * 1.0
+                
+                dets = transform_preds(
+                    dets.copy(),
+                    c, s,
+                    (self.opt.output_res, self.opt.output_res)
+                )
+           
+            if int(batch['meta']['img_id']) == 3364:
+                pred_dir = '/home/ubuntu/visionAI/movenet/images/train_pipeline_dets_post_process'
+                os.makedirs(pred_dir, exist_ok=True)
+                pred_path = os.path.join(pred_dir, f'{batch["meta"]["img_id"]}.json')
+                with open(pred_path, 'w') as f:
+                    json.dump(dets.tolist(), f)
+                print(f"Saved dets to {pred_path}")
             
             self.predictions.append({
                 'image_id': int(img_ids[0]), 
-                'keypoints': swapped_dets.tolist()
+                'keypoints': dets.tolist()
             })
                 
         except Exception as e:

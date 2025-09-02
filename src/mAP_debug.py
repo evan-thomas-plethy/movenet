@@ -20,8 +20,8 @@ from opts import opts
 from detectors.detector_factory import detector_factory
 
 # Debug configuration - change these to match your specific experiment and run
-EXPERIMENT_ID = "heel-slides-partial-unfreeze-movenet-thunder-finetune"
-RUN_NAME = "HEEL_SLIDES_run1_mid_unfreeze_with_fpn"  # Change this to your specific run name
+EXPERIMENT_ID = "heel-slides-movenet-thunder-finetune"
+RUN_NAME = "convergence_test_2"  # Change this to your specific run name
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -54,8 +54,9 @@ def evaluate_single_model(model_path, opt, coco_gt, temp_gt_path):
         try:
             # Get image info from COCO
             img_info = coco_gt.loadImgs(ids=[img_id])[0]
-            img_path = os.path.join(opt.mAP, 'val', img_info['file_name'])
-            
+            # img_path = os.path.join(opt.mAP, 'val', img_info['file_name'])
+            img_path = os.path.join(opt.mAP, img_info['file_name'])
+
             if not os.path.exists(img_path):
                 bar.next()
                 continue
@@ -71,7 +72,7 @@ def evaluate_single_model(model_path, opt, coco_gt, temp_gt_path):
                 # Convert keypoints to COCO format
                 coco_keypoints = []
                 for j in range(17):
-                    y, x, conf = det[j]  # MoveNet returns (y, x, conf)
+                    x, y, conf = det[j]
                     # Convert confidence to visibility
                     if conf > 0.5:
                         visibility = 2  # visible
@@ -84,8 +85,8 @@ def evaluate_single_model(model_path, opt, coco_gt, temp_gt_path):
                 # Create bbox from keypoints
                 visible_kps = [kp for kp in det if kp[2] > 0.1]
                 if len(visible_kps) > 0:
-                    xs = [kp[1] for kp in visible_kps]  # x coordinates (index 1)
-                    ys = [kp[0] for kp in visible_kps]  # y coordinates (index 0)
+                    xs = [kp[0] for kp in visible_kps] 
+                    ys = [kp[1] for kp in visible_kps]
                     x1, y1, x2, y2 = min(xs), min(ys), max(xs), max(ys)
                     bbox = [x1, y1, x2 - x1, y2 - y1]  # [x, y, width, height]
                 else:
@@ -163,7 +164,8 @@ def evaluate_all_checkpoints(opt):
     print(f"Evaluating checkpoints in: {run_dir}")
     
     # Load existing COCO ground truth
-    gt_annotation_path = os.path.join(opt.mAP, 'annotations', 'active_val.json')
+    # gt_annotation_path = os.path.join(opt.mAP, 'annotations', 'active_val.json')
+    gt_annotation_path = os.path.join(opt.mAP, 'annotations.json')
     if not os.path.exists(gt_annotation_path):
         print(f"Error: Ground truth annotation file not found: {gt_annotation_path}")
         return
@@ -272,7 +274,7 @@ def evaluate_all_checkpoints(opt):
 if __name__ == '__main__':
     opt = opts().init()
     
-    opt.mAP = "../data/active"
+    opt.mAP = "../data/general_val_1"
 
     print(f"DEBUG MODE: Evaluating mAP for task: {opt.task}")
     print(f"Experiment ID: {EXPERIMENT_ID}")

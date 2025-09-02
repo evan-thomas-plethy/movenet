@@ -21,6 +21,8 @@ def transform_preds(coords, center, scale, output_size):
     trans = get_affine_transform(center, scale, 0, output_size, inv=1)
     for p in range(coords.shape[0]):
         target_coords[p, 0:2] = affine_transform(coords[p, 0:2], trans)
+        if coords.shape[1] > 2:
+            target_coords[p, 2:] = coords[p, 2:]
     return target_coords
 
 
@@ -253,7 +255,7 @@ def square_padding_resize(img, target_size):
     return resized, (height, width)  # Return original dimensions for inverse transform
 
 
-def square_padding_transform_coords(coords, original_dims, target_size, padding_info=None):
+def square_padding_transform_coords(coords, original_dims, target_size):
     """
     Transform coordinates from original image space to padded+resized space.
     Used for ground truth keypoints and bounding boxes.
@@ -261,14 +263,16 @@ def square_padding_transform_coords(coords, original_dims, target_size, padding_
     orig_h, orig_w = original_dims
     target_h, target_w = target_size
     
-    # Calculate padding offsets
+    # Calculate padding offsets (matching square_padding_resize exactly)
     if orig_h > orig_w:
-        padding_left = (orig_h - orig_w) // 2
+        diff = orig_h - orig_w
+        padding_left = int(diff // 2)
         padding_top = 0
         padded_size = orig_h
     elif orig_w > orig_h:
+        diff = orig_w - orig_h
         padding_left = 0
-        padding_top = (orig_w - orig_h) // 2
+        padding_top = int(diff // 2)
         padded_size = orig_w
     else:
         padding_left = 0
@@ -284,3 +288,39 @@ def square_padding_transform_coords(coords, original_dims, target_size, padding_
     transformed_coords[:, 1] = (coords[:, 1] + padding_top) * scale_factor
     
     return transformed_coords
+
+
+def inverse_square_padding_transform_coords(coords, original_dims, target_size):
+    """
+    Inverse transform coordinates from padded+resized space back to original image space.
+    This is the inverse of square_padding_transform_coords.
+    """
+    orig_h, orig_w = original_dims
+    target_h, target_w = target_size
+    
+    # Calculate padding offsets (matching square_padding_resize exactly)
+    if orig_h > orig_w:
+        diff = orig_h - orig_w
+        padding_left = int(diff // 2)
+        padding_top = 0
+        padded_size = orig_h
+    elif orig_w > orig_h:
+        diff = orig_w - orig_h
+        padding_left = 0
+        padding_top = int(diff // 2)
+        padded_size = orig_w
+    else:
+        padding_left = 0
+        padding_top = 0
+        padded_size = orig_h
+    
+    # Scale factor from padded size to target size
+    scale_factor = max(target_h, target_w) / padded_size
+    
+    # Inverse transform coordinates
+    inverse_coords = coords.copy()
+    # First divide by scale factor, then subtract padding
+    inverse_coords[:, 0] = coords[:, 0] / scale_factor - padding_left
+    inverse_coords[:, 1] = coords[:, 1] / scale_factor - padding_top
+    
+    return inverse_coords
