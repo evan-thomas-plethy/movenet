@@ -4,10 +4,11 @@ import random
 import shutil
 
 # Set paths
-json_path = "heel/input_keypoints.json"
-merged_dir = "heel/input_frames/"
-train_dir = "active/train/"
-val_dir = "active/val/"
+json_path = "../merged_dataset/person_bboxes.json"
+merged_dir = "../merged_dataset/input_frames/"
+train_dir = "../heel_slides/train/"
+val_dir = "../heel_slides/val/"
+annotations_dir = "../heel_slides/annotations/"
 
 if os.path.exists(train_dir):
     shutil.rmtree(train_dir)
@@ -17,6 +18,7 @@ if os.path.exists(val_dir):
 
 os.makedirs(train_dir, exist_ok=True)
 os.makedirs(val_dir, exist_ok=True)
+os.makedirs(annotations_dir, exist_ok=True)
 
 # Load COCO JSON file
 with open(json_path, 'r') as f:
@@ -37,13 +39,21 @@ val_ids = {img["id"] for img in val_images}
 train_annotations = [ann for ann in data["annotations"] if ann["image_id"] in train_ids]
 val_annotations = [ann for ann in data["annotations"] if ann["image_id"] in val_ids]
 
-# Save new COCO JSON files
-train_data = {"images": train_images, "annotations": train_annotations}
-val_data = {"images": val_images, "annotations": val_annotations}
+# Save new COCO JSON files with categories
+train_data = {
+    "images": train_images, 
+    "annotations": train_annotations,
+    "categories": data.get("categories", [])
+}
+val_data = {
+    "images": val_images, 
+    "annotations": val_annotations,
+    "categories": data.get("categories", [])
+}
 
-with open("active/annotations/active_train.json", "w") as f:
+with open(os.path.join(annotations_dir, "train.json"), "w") as f:
     json.dump(train_data, f, indent=4)
-with open("active/annotations/active_val.json", "w") as f:
+with open(os.path.join(annotations_dir, "val.json"), "w") as f:
     json.dump(val_data, f, indent=4)
 
 for img in train_images:

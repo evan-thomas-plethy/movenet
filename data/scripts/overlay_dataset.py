@@ -4,25 +4,42 @@ import cv2
 import numpy as np
 
 # Path configurations
-IMAGE_DIR = '../active/val'  # Directory containing images
-ANNOTATION_FILE = '../active/annotations/active_val.json'  # COCO keypoints JSON
-OUTPUT_VIDEO = '../val_overlay.mp4'  # Output video file
+IMAGE_DIR = '../merged_dataset/input_frames'  # Directory containing images
+ANNOTATION_FILE = '../merged_dataset/person_bboxes.json'  # COCO keypoints JSON
+OUTPUT_VIDEO = '../bboxes_overlay.mp4'  # Output video file
 FPS = 10  # Frames per second
 OUTPUT_SIZE = (1280, 720)  # Width, Height for video
 
-def overlay_keypoints(image, annotations, image_id):
+def overlay_keypoints_and_bbox(image, annotations, image_id):
     for annotation in annotations:
         if annotation['image_id'] == image_id:
-            keypoints = annotation['keypoints']
-            num_keypoints = len(keypoints) // 3
+            # Overlay bounding box
+            bbox = annotation.get('bbox', [])
+            if bbox and len(bbox) >= 4:
+                # COCO bbox format: [x, y, width, height]
+                x, y, w, h = bbox[:4]
+                x, y, w, h = int(x), int(y), int(w), int(h)
+                # Draw bounding box rectangle
+                cv2.rectangle(image, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                
+                # Add bbox score if available
+                bbox_score = annotation.get('bbox_score', 1.0)
+                if bbox_score < 1.0:
+                    cv2.putText(image, f'{bbox_score:.2f}', (x, y - 10), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+            
+            # Overlay keypoints
+            keypoints = annotation.get('keypoints', [])
+            if keypoints:
+                num_keypoints = len(keypoints) // 3
 
-            for i in range(num_keypoints):
-                x = keypoints[i * 3]
-                y = keypoints[i * 3 + 1]
-                confidence = keypoints[i * 3 + 2]
+                for i in range(num_keypoints):
+                    x = keypoints[i * 3]
+                    y = keypoints[i * 3 + 1]
+                    confidence = keypoints[i * 3 + 2]
 
-                if confidence > 0:
-                    cv2.circle(image, (int(x), int(y)), 3, (0, 255, 0), -1)
+                    if confidence > 0:
+                        cv2.circle(image, (int(x), int(y)), 3, (0, 255, 0), -1)
     return image
 
 def resize_with_padding(image, target_size, bg_color=(0, 0, 0)):
@@ -87,14 +104,14 @@ def create_video_from_annotations(image_dir, annotation_file, output_video, fps,
         if image_id is None:
             continue
 
-        # Overlay keypoints on the original image
-        image_with_keypoints = overlay_keypoints(image, annotations, image_id)
+        # Overlay keypoints and bounding boxes on the original image
+        image_with_overlay = overlay_keypoints_and_bbox(image, annotations, image_id)
         
         # Get original image dimensions for logging
         orig_height, orig_width = image.shape[:2]
         
         # Resize with padding to maintain aspect ratio
-        final_frame = resize_with_padding(image_with_keypoints, output_size)
+        final_frame = resize_with_padding(image_with_overlay, output_size)
         
         video_writer.write(final_frame)
         

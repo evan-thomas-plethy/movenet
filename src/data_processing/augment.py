@@ -93,9 +93,9 @@ def apply_augmentation(name, aug, p, coco_data, images, annotations, img_dir, or
             elif "crop" in name:
                 img_height = img["height"]
                 img_width = img["width"]
-                s0, s1 = CFG["augmentations"]["crop"]["ratio"]
+                ratio = CFG["augmentations"]["crop"]["ratio"]
                 dynamic_crop = A.Compose([A.RandomResizedCrop(
-                    height=img_height, width=img_width, scale=(s0,s1), ratio=(1.33,1.77), p=1.0
+                    height=img_height, width=img_width, scale=ratio, ratio=(1.33,1.77), p=1.0
                 )], keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                 augmented = dynamic_crop(image=image, keypoints=keypoints)
             else:
@@ -196,11 +196,12 @@ def build_all_augs():
     aug_list = []
     augmentations = CFG["augmentations"]
 
-    # Brightness
-    if "brightness" in augmentations:
-        low, high = augmentations["brightness"]["delta"]
-        p = augmentations["brightness"].get("probability", 1.0)
-        aug_list.append(("brightness", A.Compose([A.RandomBrightnessContrast(brightness_limit=(low, high), contrast_limit=0, p=1.0)],
+    # Brightness + Contrast (combined)
+    if "brightness_contrast" in augmentations:
+        brightness_limit = augmentations["brightness_contrast"]["brightness_limit"]
+        contrast_limit = augmentations["brightness_contrast"]["contrast_limit"]
+        p = augmentations["brightness_contrast"].get("probability", 1.0)
+        aug_list.append(("brightness_contrast", A.Compose([A.RandomBrightnessContrast(brightness_limit=brightness_limit, contrast_limit=contrast_limit, p=1.0)],
                         keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
     # Color overlay
@@ -211,49 +212,41 @@ def build_all_augs():
         aug_list.append(("color_overlay", A.Compose([ColorOverlay(colors=colors, alpha_range=alpha_range, p=p)],
                         keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
-    # Contrast
-    if "contrast" in augmentations:
-        c0, c1 = augmentations["contrast"]["ratio"]
-        p = augmentations["contrast"].get("probability", 1.0)
-        low = c0 - 1.0
-        high = c1 - 1.0
-        aug_list.append(("contrast", A.Compose([A.RandomBrightnessContrast(brightness_limit=0, contrast_limit=(low, high), p=1.0)],
-                        keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
-
     # Crop
     if "crop" in augmentations:
-        s0, s1 = augmentations["crop"]["ratio"]
+        ratio = augmentations["crop"]["ratio"]
         p = augmentations["crop"].get("probability", 1.0)
         # Create a placeholder transform - actual dimensions will be set at runtime
-        aug_list.append(("crop", A.Compose([A.RandomResizedCrop(height=1, width=1, scale=(s0,s1), ratio=(1.33,1.77), p=1.0)],
+        aug_list.append(("crop", A.Compose([A.RandomResizedCrop(height=1, width=1, scale=ratio, ratio=(1.33,1.77), p=1.0)],
                         keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
     # Gamma
     if "gamma" in augmentations:
-        g0, g1 = augmentations["gamma"]["gamma_range"]
+        gamma_limit = augmentations["gamma"]["gamma_limit"]
         p = augmentations["gamma"].get("probability", 1.0)
-        aug_list.append(("gamma", A.Compose([A.RandomGamma(gamma_limit=(g0, g1), p=1.0)],
+        aug_list.append(("gamma", A.Compose([A.RandomGamma(gamma_limit=gamma_limit, p=1.0)],
                         keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
     # Gaussian blur
     if "gaussian_blur" in augmentations:
-        s0, s1 = augmentations["gaussian_blur"]["sigma"]
+        sigma_limit = augmentations["gaussian_blur"]["sigma_limit"]
         p = augmentations["gaussian_blur"].get("probability", 1.0)
-        aug_list.append(("gaussian_blur", A.Compose([A.GaussianBlur(blur_limit=(3,7), sigma_limit=(s0, s1), p=1.0)],
+        aug_list.append(("gaussian_blur", A.Compose([A.GaussianBlur(blur_limit=(3,7), sigma_limit=sigma_limit, p=1.0)],
                         keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
-    # Hue shift
-    if "hue_shift" in augmentations:
-        h0, h1 = augmentations["hue_shift"]["shift_limit"]
-        p = augmentations["hue_shift"].get("probability", 1.0)
-        aug_list.append(("hue_shift", A.Compose([A.ColorJitter(brightness=0, contrast=0, saturation=1.0, hue=(h0, h1), p=1.0)],
+    # Hue + Saturation (combined)
+    if "hue_saturation" in augmentations:
+        hue = augmentations["hue_saturation"]["hue"]
+        saturation = augmentations["hue_saturation"]["saturation"]
+        p = augmentations["hue_saturation"].get("probability", 1.0)
+        aug_list.append(("hue_saturation", A.Compose([A.ColorJitter(brightness=0, contrast=0, saturation=saturation, hue=hue, p=1.0)],
                         keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
     # Motion blur
     if "motion_blur" in augmentations:
-        k0, k1 = augmentations["motion_blur"]["kernel_size"]
+        blur_limit = augmentations["motion_blur"]["blur_limit"]
         p = augmentations["motion_blur"].get("probability", 1.0)
-        aug_list.append(("motion_blur", A.Compose([A.MotionBlur(blur_limit=(k0, k1), p=1.0)],
+        aug_list.append(("motion_blur", A.Compose([A.MotionBlur(blur_limit=blur_limit, p=1.0)],
                         keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
     # Occlusion
@@ -267,39 +260,32 @@ def build_all_augs():
 
     # Rotation
     if "rotation" in augmentations:
-        r0, r1 = augmentations["rotation"]["degrees"]
+        limit = augmentations["rotation"]["limit"]
         p = augmentations["rotation"].get("probability", 1.0)
-        aug_list.append(("rotate", A.Compose([A.Rotate(limit=(r0, r1), border_mode=cv2.BORDER_CONSTANT, value=(0,0,0), p=1.0)],
+        aug_list.append(("rotate", A.Compose([A.Rotate(limit=limit, border_mode=cv2.BORDER_CONSTANT, value=(0,0,0), p=1.0)],
                         keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
-    # Saturation
-    if "saturation" in augmentations:
-        s0, s1 = augmentations["saturation"]["ratio"]
-        p = augmentations["saturation"].get("probability", 1.0)
-        aug_list.append(("saturation", A.Compose([A.ColorJitter(brightness=0, contrast=0, saturation=(s0, s1), hue=0, p=1.0)],
-                        keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
     # Scale
     if "scale" in augmentations:
-        s0, s1 = augmentations["scale"]["ratio"]
+        scale = augmentations["scale"]["scale"]
         p = augmentations["scale"].get("probability", 1.0)
-        aug_list.append(("scale", A.Compose([A.Affine(scale=(s0, s1), fit_output=False, mode=cv2.BORDER_CONSTANT, cval=(0,0,0), p=1.0)],
+        aug_list.append(("scale", A.Compose([A.Affine(scale=scale, fit_output=False, mode=cv2.BORDER_CONSTANT, cval=(0,0,0), p=1.0)],
                         keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
     # Shadow
     if "shadow" in augmentations:
-        i0, i1 = augmentations["shadow"]["intensity"]
+        shadow_dimension = augmentations["shadow"]["shadow_dimension"]
         p = augmentations["shadow"].get("probability", 1.0)
         aug_list.append(("shadow", A.Compose([A.RandomShadow(shadow_roi=(0, 0.5, 1, 1), num_shadows_lower=1, num_shadows_upper=1, 
-                                                           shadow_dimension=5, p=1.0)],
+                                                           shadow_dimension=shadow_dimension, p=1.0)],
                         keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
     # Translation
     if "translation" in augmentations:
-        x0, x1 = augmentations["translation"]["x_pct"]
-        y0, y1 = augmentations["translation"]["y_pct"]
+        translate_percent = augmentations["translation"]["translate_percent"]
         p = augmentations["translation"].get("probability", 1.0)
-        aug_list.append(("translation", A.Compose([A.Affine(translate_percent=(x0, x1), p=1.0)],
+        aug_list.append(("translation", A.Compose([A.Affine(translate_percent=translate_percent, p=1.0)],
                         keypoint_params=A.KeypointParams(format='xy', remove_invisible=False)), p))
 
     return aug_list
@@ -347,36 +333,32 @@ def apply_dependent_augmentations(coco_data, images, annotations, img_dir, origi
             # Check if this color augmentation should be applied
             if random.random() <= p:
                 # Build the color augmentation
-                if color_aug_name == "brightness":
-                    low, high = aug_config["delta"]
-                    aug = A.Compose([A.RandomBrightnessContrast(brightness_limit=(low, high), contrast_limit=0, p=1.0)],
+                if color_aug_name == "brightness_contrast":
+                    brightness_limit = aug_config["brightness_limit"]
+                    contrast_limit = aug_config["contrast_limit"]
+                    aug = A.Compose([A.RandomBrightnessContrast(brightness_limit=brightness_limit, contrast_limit=contrast_limit, p=1.0)],
                                    keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                 elif color_aug_name == "color_overlay":
                     colors = aug_config["colors"]
                     alpha_range = aug_config["alpha"]
                     aug = A.Compose([ColorOverlay(colors=colors, alpha_range=alpha_range, p=1.0)],
                                    keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
-                elif color_aug_name == "contrast":
-                    c0, c1 = aug_config["ratio"]
-                    low = c0 - 1.0
-                    high = c1 - 1.0
-                    aug = A.Compose([A.RandomBrightnessContrast(brightness_limit=0, contrast_limit=(low, high), p=1.0)],
-                                   keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                 elif color_aug_name == "gamma":
-                    g0, g1 = aug_config["gamma_range"]
-                    aug = A.Compose([A.RandomGamma(gamma_limit=(g0, g1), p=1.0)],
+                    gamma_limit = aug_config["gamma_limit"]
+                    aug = A.Compose([A.RandomGamma(gamma_limit=gamma_limit, p=1.0)],
                                    keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                 elif color_aug_name == "gaussian_blur":
-                    s0, s1 = aug_config["sigma"]
-                    aug = A.Compose([A.GaussianBlur(blur_limit=(3,7), sigma_limit=(s0, s1), p=1.0)],
+                    sigma_limit = aug_config["sigma_limit"]
+                    aug = A.Compose([A.GaussianBlur(blur_limit=(3,7), sigma_limit=sigma_limit, p=1.0)],
                                    keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
-                elif color_aug_name == "hue_shift":
-                    h0, h1 = aug_config["shift_limit"]
-                    aug = A.Compose([A.ColorJitter(brightness=0, contrast=0, saturation=1.0, hue=(h0, h1), p=1.0)],
+                elif color_aug_name == "hue_saturation":
+                    hue = aug_config["hue"]
+                    saturation = aug_config["saturation"]
+                    aug = A.Compose([A.ColorJitter(brightness=0, contrast=0, saturation=saturation, hue=hue, p=1.0)],
                                    keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                 elif color_aug_name == "motion_blur":
-                    k0, k1 = aug_config["kernel_size"]
-                    aug = A.Compose([A.MotionBlur(blur_limit=(k0, k1), p=1.0)],
+                    blur_limit = aug_config["blur_limit"]
+                    aug = A.Compose([A.MotionBlur(blur_limit=blur_limit, p=1.0)],
                                    keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                 elif color_aug_name == "occlusion":
                     a0, a1 = aug_config["area_pct"]
@@ -388,14 +370,10 @@ def apply_dependent_augmentations(coco_data, images, annotations, img_dir, origi
                         min_width=int(a0 * img_width), max_width=int(a1 * img_width), 
                         fill_value=(0,0,0), p=1.0
                     )], keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
-                elif color_aug_name == "saturation":
-                    s0, s1 = aug_config["ratio"]
-                    aug = A.Compose([A.ColorJitter(brightness=0, contrast=0, saturation=(s0, s1), hue=0, p=1.0)],
-                                   keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                 elif color_aug_name == "shadow":
-                    i0, i1 = aug_config["intensity"]
+                    shadow_dimension = aug_config["shadow_dimension"]
                     aug = A.Compose([A.RandomShadow(shadow_roi=(0, 0.5, 1, 1), num_shadows_lower=1, num_shadows_upper=1, 
-                                                   shadow_dimension=5, p=1.0)],
+                                                   shadow_dimension=shadow_dimension, p=1.0)],
                                    keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                 else:
                     continue
@@ -413,23 +391,22 @@ def apply_dependent_augmentations(coco_data, images, annotations, img_dir, origi
                         
                         # Build the geometric augmentation
                         if chosen_geometric == "crop":
-                            s0, s1 = geom_config["ratio"]
+                            ratio = geom_config["ratio"]
                             img_height = img["height"]
                             img_width = img["width"]
-                            geom_aug = A.Compose([A.RandomResizedCrop(height=img_height, width=img_width, scale=(s0,s1), ratio=(1.33,1.77), p=1.0)],
+                            geom_aug = A.Compose([A.RandomResizedCrop(height=img_height, width=img_width, scale=ratio, ratio=(1.33,1.77), p=1.0)],
                                                keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                         elif chosen_geometric == "rotation":
-                            r0, r1 = geom_config["degrees"]
-                            geom_aug = A.Compose([A.Rotate(limit=(r0, r1), border_mode=cv2.BORDER_CONSTANT, value=(0,0,0), p=1.0)],
+                            limit = geom_config["limit"]
+                            geom_aug = A.Compose([A.Rotate(limit=limit, border_mode=cv2.BORDER_CONSTANT, value=(0,0,0), p=1.0)],
                                                keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                         elif chosen_geometric == "scale":
-                            s0, s1 = geom_config["ratio"]
-                            geom_aug = A.Compose([A.Affine(scale=(s0, s1), fit_output=False, mode=cv2.BORDER_CONSTANT, cval=(0,0,0), p=1.0)],
+                            scale = geom_config["scale"]
+                            geom_aug = A.Compose([A.Affine(scale=scale, fit_output=False, mode=cv2.BORDER_CONSTANT, cval=(0,0,0), p=1.0)],
                                                keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                         elif chosen_geometric == "translation":
-                            x0, x1 = geom_config["x_pct"]
-                            y0, y1 = geom_config["y_pct"]
-                            geom_aug = A.Compose([A.Affine(translate_percent=(x0, x1), p=1.0)],
+                            translate_percent = geom_config["translate_percent"]
+                            geom_aug = A.Compose([A.Affine(translate_percent=translate_percent, p=1.0)],
                                                keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
                         else:
                             continue

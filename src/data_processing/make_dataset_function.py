@@ -8,7 +8,7 @@ from data_processing.augment import run_all_augmentations
 
 def make_training_dataset(
     json_path,
-    all_images_dir,
+    input_frames_dir,
     train_dir,
     val_dir,
     train_json_out,
@@ -28,7 +28,6 @@ def make_training_dataset(
     - Adds augmentation descriptions to train JSON's info['description'].
     - If `general_val_dir` is provided, adds its annotations and images to val set.
     """
-    input_frames_dir = os.path.join(all_images_dir, "input_frames")
 
     # Create output directories for JSON files
     os.makedirs(os.path.dirname(train_json_out), exist_ok=True)

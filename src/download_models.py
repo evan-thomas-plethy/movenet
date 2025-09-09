@@ -51,6 +51,20 @@ def download_models_from_experiment(experiment_name):
         print(f"\nProcessing run: {run_name} (ID: {run_id})")
         
         try:
+            # First check if model_best.pth artifact exists in the run
+            try:
+                client = mlflow.tracking.MlflowClient()
+                artifacts = client.list_artifacts(run_id)
+                artifact_names = [artifact.path for artifact in artifacts]
+                
+                if "model_best.pth" not in artifact_names:
+                    print(f"⚠ Run {run_name} does not have model_best.pth artifact - skipping")
+                    continue
+                    
+            except Exception as artifact_check_error:
+                print(f"⚠ Could not check artifacts for run {run_name}: {artifact_check_error} - skipping")
+                continue
+            
             # Create run-specific directory using run name
             run_dir = output_path / run_name
             run_dir.mkdir(exist_ok=True)

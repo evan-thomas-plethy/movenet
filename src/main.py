@@ -26,14 +26,14 @@ from data_processing.make_dataset_function import make_training_dataset
 
 def main(opt):
     make_training_dataset(
-        json_path="../data/merged_dataset/person_keypoints.json",
-        all_images_dir="../data/merged_dataset/",
+        json_path="../data/merged_dataset/person_bboxes.json",
+        input_frames_dir="../data/merged_dataset/input_frames/",
         train_dir="../data/active/train/",
         val_dir="../data/active/val/",
         train_json_out="../data/active/annotations/active_train.json",
         val_json_out="../data/active/annotations/active_val.json",
         val_ratio=0.15,
-        general_val_dir="../data/general_val_500/",
+        general_val_dir=None,
         use_general_val=False,
         use_existing_train_set=False,
         use_existing_val=True,
